@@ -1,0 +1,54 @@
+services:
+  starpeace-quadrants-traefik:
+    image: traefik:v2.2
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+      - "5672:5672"
+    command:
+      - --log=true
+      - --log.level=ERR
+      - --tracing=false
+      - --accesslog=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.docker/traefik/traefik.toml:/traefik.toml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`monitor.starpeace-quadrants.localhost`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+    networks:
+      - starpeace-quadrants-network
+  starpeace-quadrants-rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.starpeace-quadrants.localhost`)"
+      - "traefik.http.routers.rabbitmq.entrypoints=web"
+      - "traefik.http.routers.rabbitmq.service=rabbitmq"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+      - "traefik.tcp.routers.ingress.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.ingress.entrypoints=rabbitmq"
+      - "traefik.tcp.services.ingress.loadbalancer.server.port=5672"
+    environment:
+        - RABBITMQ_DEFAULT_USER=guest
+        - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - starpeace-quadrants-network
+    volumes:
+      - ./.docker/rabbitmq/data:/var/lib/rabbitmq
+      - ./.docker/rabbitmq/init/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./.docker/rabbitmq/init/definitions.json:/etc/rabbitmq/definitions.json:ro
+
+networks:
+  starpeace-quadrants-network:
+    name: starpeace-quadrants-network
